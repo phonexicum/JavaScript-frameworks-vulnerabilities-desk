@@ -1,0 +1,11 @@
+<!-- evil.xml -->
+<?xml version="1.0"?>
+<bindings>
+    <binding id="exp">
+        <implementation>
+            <constructor>
+                document.write("hacked")
+            </constructor>
+        </implementation>
+    </binding>
+</bindings>

